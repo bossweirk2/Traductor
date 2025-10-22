@@ -1,88 +1,169 @@
+import os
 import streamlit as st
-from googletrans import Translator
+from bokeh.models import Button, CustomJS
+from streamlit_bokeh_events import streamlit_bokeh_events
 from gtts import gTTS
-import speech_recognition as sr
-from st_audiorec import st_audiorec
-from io import BytesIO
-from PIL import Image
+from googletrans import Translator
+import random, time, glob
 
-st.set_page_config(page_title="Traductor por voz", page_icon="🎧", layout="centered")
+# ------------------ CONFIGURACIÓN GENERAL ------------------
+st.set_page_config(page_title="Traductor Poético Futurista", page_icon="🪶", layout="centered")
 
+# ---- ESTILOS FUTURISTAS ----
 st.markdown("""
     <style>
-    body, .stApp { background-color: #0f1c2e; color: white; }
-    h1, h2, h3 { color: #58a6ff; text-align: center; }
-    .stButton button {
-        background-color: #1e3a5f !important;
-        color: white !important;
-        border-radius: 10px;
-        border: 1px solid #58a6ff;
-        font-weight: bold;
+    body {
+        background-color: #0b0f19;
+        color: #e0e0e0;
     }
-    .stButton button:hover {
-        background-color: #58a6ff !important;
-        color: #0f1c2e !important;
+    .main {
+        background: radial-gradient(circle at 20% 20%, #141a2e, #0b0f19 70%);
+        border: 1px solid #222;
+        padding: 2rem;
+        border-radius: 20px;
+        box-shadow: 0 0 25px #00f7ff20;
+    }
+    h1, h2, h3 {
+        color: #8af3ff;
+        text-shadow: 0 0 8px #00f7ff80;
+    }
+    .stButton>button {
+        background: linear-gradient(90deg, #00d0ff, #7f00ff);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 0.6em 1.5em;
+        font-size: 16px;
+        transition: 0.3s;
+        font-weight: 600;
+    }
+    .stButton>button:hover {
+        transform: scale(1.05);
+        box-shadow: 0 0 15px #00f7ff80;
+    }
+    .neon {
+        color: #a7f7ff;
+        text-shadow: 0 0 8px #00f7ff, 0 0 12px #8a2be280;
+        font-style: italic;
+    }
+    .poem-box {
+        background-color: #141a2e;
+        border: 1px solid #00f7ff30;
+        padding: 1.5rem;
+        border-radius: 12px;
+        box-shadow: 0 0 12px #00f7ff20;
+        font-size: 1.1rem;
+        line-height: 1.5;
+        color: #e3f6ff;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🎤 Traductor por voz")
-st.subheader("Escucha, traduce y reproduce tu voz — por Santiago Velasquez")
+# ------------------ INTERFAZ ------------------
+st.title("🪶 Traductor Poético Futurista")
+st.caption("Convierte tu voz en versos interestelares 🌌")
 
-image_url = "https://cdn.pixabay.com/photo/2020/05/28/02/53/headphones-5222602_1280.jpg"
-st.image(image_url, use_column_width=True)
+translator = Translator()
 
-with st.sidebar:
-    st.header("🌍 Ajustes del traductor")
-    st.write("Graba tu voz desde el navegador, elige idiomas y traduce fácilmente.")
+# ------------------ CAPTURA DE VOZ ------------------
+st.subheader("🎙️ Habla tu inspiración")
 
-# Grabar audio
-st.markdown("### 🎧 Graba tu voz:")
-audio_bytes = st_audiorec()
-
-text = None
-if audio_bytes:
-    st.success("✅ Audio grabado correctamente.")
-    recognizer = sr.Recognizer()
-    with sr.AudioFile(BytesIO(audio_bytes)) as source:
-        audio_data = recognizer.record(source)
-        try:
-            text = recognizer.recognize_google(audio_data, language="es-ES")
-            st.write("🗣 Texto detectado:", text)
-        except Exception as e:
-            st.error("No se pudo reconocer el audio. Intenta hablar más claro o más corto.")
-            text = None
-
-if text:
-    translator = Translator()
-
-    col1, col2 = st.columns(2)
-    with col1:
-        input_lang = st.selectbox("Idioma de entrada", ["Español", "Inglés", "Francés", "Japonés", "Coreano"])
-    with col2:
-        output_lang = st.selectbox("Idioma de salida", ["Inglés", "Español", "Francés", "Japonés", "Coreano"])
-
-    lang_codes = {
-        "Español": "es",
-        "Inglés": "en",
-        "Francés": "fr",
-        "Japonés": "ja",
-        "Coreano": "ko"
+stt_button = Button(label="🎧 Escuchar tu voz", width=300)
+stt_button.js_on_event("button_click", CustomJS(code="""
+    var recognition = new webkitSpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.onresult = function (e) {
+        var value = "";
+        for (var i = e.resultIndex; i < e.results.length; ++i) {
+            if (e.results[i].isFinal) {
+                value += e.results[i][0].transcript;
+            }
+        }
+        if (value != "") {
+            document.dispatchEvent(new CustomEvent("GET_TEXT", {detail: value}));
+        }
     }
+    recognition.start();
+"""))
 
-    input_code = lang_codes[input_lang]
-    output_code = lang_codes[output_lang]
+result = streamlit_bokeh_events(
+    stt_button,
+    events="GET_TEXT",
+    key="listen",
+    refresh_on_update=False,
+    override_height=75,
+)
 
-    translation = translator.translate(text, src=input_code, dest=output_code)
-    translated_text = translation.text
+if result and "GET_TEXT" in result:
+    text = result.get("GET_TEXT")
+    st.success("✨ Texto capturado:")
+    st.markdown(f"<div class='neon'>“{text}”</div>", unsafe_allow_html=True)
+else:
+    text = ""
 
-    st.markdown("### 🌐 Traducción:")
-    st.write(translated_text)
+# ------------------ FUNCIONES ------------------
 
-    if st.button("🔊 Reproducir traducción"):
-        tts = gTTS(translated_text, lang=output_code)
-        tts.save("translation.mp3")
-        st.audio("translation.mp3", format="audio/mp3")
+def crear_poema(texto_base):
+    """Genera un poema simple basado en el texto de entrada."""
+    lineas = [
+        f"Entre las sombras del código, {texto_base.lower()},",
+        f"un susurro viaja entre líneas de luz,",
+        f"la máquina escucha, siente, traduce,",
+        f"y convierte tu voz en un sueño azul.",
+        f"Tu frase cruza fronteras del alma,",
+        f"se vuelve eco en la red estelar,",
+        f"donde los bytes respiran calma,",
+        f"y las palabras aprenden a amar.",
+    ]
+    random.shuffle(lineas)
+    return "\n".join(lineas)
 
+def text_to_speech(text):
+    """Convierte texto a audio con gTTS"""
+    tts = gTTS(text, lang="es", tld="com", slow=False)
+    os.makedirs("temp", exist_ok=True)
+    path = "temp/poema.mp3"
+    tts.save(path)
+    return path
+
+def remove_old_files():
+    for f in glob.glob("temp/*.mp3"):
+        if os.stat(f).st_mtime < time.time() - 86400:
+            os.remove(f)
+
+remove_old_files()
+
+# ------------------ GENERACIÓN POÉTICA ------------------
+if st.button("💫 Generar poema"):
+    if text:
+        poema = crear_poema(text)
+        st.markdown("<div class='poem-box'>" + poema.replace("\n", "<br>") + "</div>", unsafe_allow_html=True)
+        st.audio(text_to_speech(poema), format="audio/mp3")
+    else:
+        st.warning("Por favor, habla algo antes de generar el poema.")
+
+# ------------------ MODO EXTRA: TRADUCCIÓN ------------------
 st.markdown("---")
-st.markdown("<p style='text-align:center; color:gray;'>Desarrollado por <b>Santiago Velasquez</b></p>", unsafe_allow_html=True)
+st.subheader("🌐 Traducir el poema (opcional)")
+
+idioma_destino = st.selectbox("Selecciona el idioma de destino", ["Inglés", "Francés", "Japonés", "Coreano"])
+mapa_idiomas = {"Inglés": "en", "Francés": "fr", "Japonés": "ja", "Coreano": "ko"}
+
+if st.button("🌍 Traducir poema"):
+    if text:
+        poema = crear_poema(text)
+        traduccion = translator.translate(poema, dest=mapa_idiomas[idioma_destino]).text
+        st.markdown(f"#### ✨ Poema en {idioma_destino}:")
+        st.markdown(f"<div class='poem-box'>{traduccion}</div>", unsafe_allow_html=True)
+    else:
+        st.warning("Primero genera o graba tu poema.")
+
+# ------------------ FOOTER ------------------
+st.markdown("""
+---
+<div style='text-align:center; color:#777; font-size:0.9rem'>
+Hecho con 💙 por un algoritmo que sueña en binario.<br>
+<em>“Donde la voz humana se transforma en poesía digital.”</em>
+</div>
+""", unsafe_allow_html=True)
