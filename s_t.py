@@ -1,176 +1,88 @@
-import os
-import sys
-import types
-sys.modules['cgi'] = types.ModuleType('cgi')
 import streamlit as st
-from bokeh.models import Button, CustomJS
-from streamlit_bokeh_events import streamlit_bokeh_events
-from PIL import Image
-from gtts import gTTS
 from googletrans import Translator
-import time
-import glob
-import base64
+from gtts import gTTS
+import speech_recognition as sr
+from st_audiorec import st_audiorec
+from io import BytesIO
+from PIL import Image
 
-# --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Traductor por Voz", page_icon="🌎", layout="centered")
+st.set_page_config(page_title="Traductor por voz", page_icon="🎧", layout="centered")
 
-# --- TÍTULO Y ENCABEZADO ---
-st.markdown(
-    """
-    <h1 style="text-align:center; color:#1E3A8A;">🌐 Traductor por Voz</h1>
-    <p style="text-align:center; color:#2563EB;">Habla, traduce y escucha tu voz en otro idioma</p>
-    """,
-    unsafe_allow_html=True,
-)
+st.markdown("""
+    <style>
+    body, .stApp { background-color: #0f1c2e; color: white; }
+    h1, h2, h3 { color: #58a6ff; text-align: center; }
+    .stButton button {
+        background-color: #1e3a5f !important;
+        color: white !important;
+        border-radius: 10px;
+        border: 1px solid #58a6ff;
+        font-weight: bold;
+    }
+    .stButton button:hover {
+        background-color: #58a6ff !important;
+        color: #0f1c2e !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-# --- IMAGEN DE CABECERA ---
-image_url = "https://cdn.pixabay.com/photo/2021/04/02/12/39/translator-6145110_1280.png"
-st.image(image_url, width=350)
+st.title("🎤 Traductor por voz")
+st.subheader("Escucha, traduce y reproduce tu voz — por Santiago Velasquez")
+
+image_url = "https://cdn.pixabay.com/photo/2020/05/28/02/53/headphones-5222602_1280.jpg"
+st.image(image_url, use_column_width=True)
 
 with st.sidebar:
-    st.subheader("🗣️ Cómo usarlo:")
-    st.write(
-        "1️⃣ Presiona el botón 'Escuchar 🎤'.\n\n"
-        "2️⃣ Habla la frase que deseas traducir.\n\n"
-        "3️⃣ Selecciona los idiomas y el acento.\n\n"
-        "4️⃣ Escucha o descarga el resultado."
-    )
+    st.header("🌍 Ajustes del traductor")
+    st.write("Graba tu voz desde el navegador, elige idiomas y traduce fácilmente.")
 
-st.markdown("### 🎧 Toca el botón y habla lo que quieres traducir")
+# Grabar audio
+st.markdown("### 🎧 Graba tu voz:")
+audio_bytes = st_audiorec()
 
-# --- BOTÓN DE ESCUCHA ---
-stt_button = Button(label="🎤 Escuchar", width=300, height=50)
+text = None
+if audio_bytes:
+    st.success("✅ Audio grabado correctamente.")
+    recognizer = sr.Recognizer()
+    with sr.AudioFile(BytesIO(audio_bytes)) as source:
+        audio_data = recognizer.record(source)
+        try:
+            text = recognizer.recognize_google(audio_data, language="es-ES")
+            st.write("🗣 Texto detectado:", text)
+        except Exception as e:
+            st.error("No se pudo reconocer el audio. Intenta hablar más claro o más corto.")
+            text = None
 
-stt_button.js_on_event("button_click", CustomJS(code="""
-    var recognition = new webkitSpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-
-    recognition.onresult = function (e) {
-        var value = "";
-        for (var i = e.resultIndex; i < e.results.length; ++i) {
-            if (e.results[i].isFinal) {
-                value += e.results[i][0].transcript;
-            }
-        }
-        if (value != "") {
-            document.dispatchEvent(new CustomEvent("GET_TEXT", {detail: value}));
-        }
-    }
-    recognition.start();
-"""))
-
-result = streamlit_bokeh_events(
-    stt_button,
-    events="GET_TEXT",
-    key="listen",
-    refresh_on_update=False,
-    override_height=75,
-    debounce_time=0,
-)
-
-# --- PROCESAMIENTO DEL TEXTO ---
-if result and "GET_TEXT" in result:
-    spoken_text = result.get("GET_TEXT")
-    st.success(f"Texto detectado: {spoken_text}")
-
-    os.makedirs("temp", exist_ok=True)
-
+if text:
     translator = Translator()
 
-    # --- SELECCIÓN DE IDIOMAS ---
-    st.markdown("### 🌍 Configura los idiomas")
-    in_lang = st.selectbox(
-        "Selecciona el idioma de entrada:",
-        ("Inglés", "Español", "Bengalí", "Coreano", "Mandarín", "Japonés"),
-    )
+    col1, col2 = st.columns(2)
+    with col1:
+        input_lang = st.selectbox("Idioma de entrada", ["Español", "Inglés", "Francés", "Japonés", "Coreano"])
+    with col2:
+        output_lang = st.selectbox("Idioma de salida", ["Inglés", "Español", "Francés", "Japonés", "Coreano"])
 
-    out_lang = st.selectbox(
-        "Selecciona el idioma de salida:",
-        ("Español", "Inglés", "Bengalí", "Coreano", "Mandarín", "Japonés"),
-    )
-
-    lang_dict = {
-        "Inglés": "en",
+    lang_codes = {
         "Español": "es",
-        "Bengalí": "bn",
-        "Coreano": "ko",
-        "Mandarín": "zh-cn",
+        "Inglés": "en",
+        "Francés": "fr",
         "Japonés": "ja",
+        "Coreano": "ko"
     }
 
-    input_language = lang_dict[in_lang]
-    output_language = lang_dict[out_lang]
+    input_code = lang_codes[input_lang]
+    output_code = lang_codes[output_lang]
 
-    # --- SELECCIÓN DE ACENTO ---
-    st.markdown("### 🎙️ Elige un acento para el audio")
-    english_accent = st.selectbox(
-        "Acento preferido:",
-        ("Defecto", "Español", "Reino Unido", "Estados Unidos", "Canadá", "Australia", "Irlanda", "Sudáfrica"),
-    )
+    translation = translator.translate(text, src=input_code, dest=output_code)
+    translated_text = translation.text
 
-    tld_dict = {
-        "Defecto": "com",
-        "Español": "com.mx",
-        "Reino Unido": "co.uk",
-        "Estados Unidos": "com",
-        "Canadá": "ca",
-        "Australia": "com.au",
-        "Irlanda": "ie",
-        "Sudáfrica": "co.za",
-    }
+    st.markdown("### 🌐 Traducción:")
+    st.write(translated_text)
 
-    tld = tld_dict.get(english_accent, "com")
+    if st.button("🔊 Reproducir traducción"):
+        tts = gTTS(translated_text, lang=output_code)
+        tts.save("translation.mp3")
+        st.audio("translation.mp3", format="audio/mp3")
 
-    # --- FUNCIÓN DE TRADUCCIÓN Y VOZ ---
-    def text_to_speech(input_language, output_language, text, tld):
-        translation = translator.translate(text, src=input_language, dest=output_language)
-        trans_text = translation.text
-        tts = gTTS(trans_text, lang=output_language, tld=tld, slow=False)
-        filename = "temp/audio.mp3"
-        tts.save(filename)
-        return filename, trans_text
-
-    display_output_text = st.checkbox("Mostrar texto traducido")
-
-    # --- BOTÓN DE CONVERSIÓN ---
-    if st.button("🔊 Convertir y Escuchar"):
-        audio_file, translated_text = text_to_speech(input_language, output_language, spoken_text, tld)
-        audio_bytes = open(audio_file, "rb").read()
-
-        st.markdown("## 🎧 Tu audio:")
-        st.audio(audio_bytes, format="audio/mp3")
-
-        if display_output_text:
-            st.markdown("### 📄 Texto traducido:")
-            st.info(translated_text)
-
-        # --- DESCARGA ---
-        with open(audio_file, "rb") as f:
-            data = f.read()
-        bin_str = base64.b64encode(data).decode()
-        href = f'<a href="data:application/octet-stream;base64,{bin_str}" download="traduccion.mp3">📥 Descargar audio</a>'
-        st.markdown(href, unsafe_allow_html=True)
-
-    # --- LIMPIEZA AUTOMÁTICA ---
-    def remove_files(n):
-        mp3_files = glob.glob("temp/*.mp3")
-        now = time.time()
-        n_days = n * 86400
-        for f in mp3_files:
-            if os.stat(f).st_mtime < now - n_days:
-                os.remove(f)
-
-    remove_files(7)
-
-# --- PIE DE PÁGINA ---
-st.markdown(
-    """
-    <hr>
-    <p style="text-align:center; color:#2563EB;">
-    Hecho con 🌍 por <b>Santiago Velásquez</b>
-    </p>
-    """,
-    unsafe_allow_html=True,
-)
+st.markdown("---")
+st.markdown("<p style='text-align:center; color:gray;'>Desarrollado por <b>Santiago Velasquez</b></p>", unsafe_allow_html=True)
