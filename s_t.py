@@ -1,78 +1,43 @@
 import os
 import streamlit as st
-from bokeh.models import Button, CustomJS
+from bokeh.models.widgets import Button
+#from bokeh.io import show
+#from bokeh.models import Button
+from bokeh.models import CustomJS
 from streamlit_bokeh_events import streamlit_bokeh_events
+from PIL import Image
+import time
+import glob
+
+
+
 from gtts import gTTS
 from googletrans import Translator
-import random, time, glob
 
-# ------------------ CONFIGURACIÓN GENERAL ------------------
-st.set_page_config(page_title="Traductor Poético Futurista", page_icon="🪶", layout="centered")
 
-# ---- ESTILOS FUTURISTAS ----
-st.markdown("""
-    <style>
-    body {
-        background-color: #0b0f19;
-        color: #e0e0e0;
-    }
-    .main {
-        background: radial-gradient(circle at 20% 20%, #141a2e, #0b0f19 70%);
-        border: 1px solid #222;
-        padding: 2rem;
-        border-radius: 20px;
-        box-shadow: 0 0 25px #00f7ff20;
-    }
-    h1, h2, h3 {
-        color: #8af3ff;
-        text-shadow: 0 0 8px #00f7ff80;
-    }
-    .stButton>button {
-        background: linear-gradient(90deg, #00d0ff, #7f00ff);
-        color: white;
-        border: none;
-        border-radius: 10px;
-        padding: 0.6em 1.5em;
-        font-size: 16px;
-        transition: 0.3s;
-        font-weight: 600;
-    }
-    .stButton>button:hover {
-        transform: scale(1.05);
-        box-shadow: 0 0 15px #00f7ff80;
-    }
-    .neon {
-        color: #a7f7ff;
-        text-shadow: 0 0 8px #00f7ff, 0 0 12px #8a2be280;
-        font-style: italic;
-    }
-    .poem-box {
-        background-color: #141a2e;
-        border: 1px solid #00f7ff30;
-        padding: 1.5rem;
-        border-radius: 12px;
-        box-shadow: 0 0 12px #00f7ff20;
-        font-size: 1.1rem;
-        line-height: 1.5;
-        color: #e3f6ff;
-    }
-    </style>
-""", unsafe_allow_html=True)
+st.title("TRADUCTOR.")
+st.subheader("Escucho lo que quieres traducir.")
 
-# ------------------ INTERFAZ ------------------
-st.title("🪶 Traductor Poético Futurista")
-st.caption("Convierte tu voz en versos interestelares 🌌")
 
-translator = Translator()
+image = Image.open('OIG7.jpg')
 
-# ------------------ CAPTURA DE VOZ ------------------
-st.subheader("🎙️ Habla tu inspiración")
+st.image(image,width=300)
+with st.sidebar:
+    st.subheader("Traductor.")
+    st.write("Presiona el botón, cuando escuches la señal "
+                 "habla lo que quieres traducir, luego selecciona"   
+                 " la configuración de lenguaje que necesites.")
 
-stt_button = Button(label="🎧 Escuchar tu voz", width=300)
+
+st.write("Toca el Botón y habla lo que quires traducir")
+
+stt_button = Button(label=" Escuchar  🎤", width=300,  height=50)
+
 stt_button.js_on_event("button_click", CustomJS(code="""
     var recognition = new webkitSpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
+ 
     recognition.onresult = function (e) {
         var value = "";
         for (var i = e.resultIndex; i < e.results.length; ++i) {
@@ -80,12 +45,12 @@ stt_button.js_on_event("button_click", CustomJS(code="""
                 value += e.results[i][0].transcript;
             }
         }
-        if (value != "") {
+        if ( value != "") {
             document.dispatchEvent(new CustomEvent("GET_TEXT", {detail: value}));
         }
     }
     recognition.start();
-"""))
+    """))
 
 result = streamlit_bokeh_events(
     stt_button,
@@ -93,77 +58,122 @@ result = streamlit_bokeh_events(
     key="listen",
     refresh_on_update=False,
     override_height=75,
-)
+    debounce_time=0)
 
-if result and "GET_TEXT" in result:
-    text = result.get("GET_TEXT")
-    st.success("✨ Texto capturado:")
-    st.markdown(f"<div class='neon'>“{text}”</div>", unsafe_allow_html=True)
-else:
-    text = ""
+if result:
+    if "GET_TEXT" in result:
+        st.write(result.get("GET_TEXT"))
+    try:
+        os.mkdir("temp")
+    except:
+        pass
+    st.title("Texto a Audio")
+    translator = Translator()
+    
+    text = str(result.get("GET_TEXT"))
+    in_lang = st.selectbox(
+        "Selecciona el lenguaje de Entrada",
+        ("Inglés", "Español", "Bengali", "Coreano", "Mandarín", "Japonés"),
+    )
+    if in_lang == "Inglés":
+        input_language = "en"
+    elif in_lang == "Español":
+        input_language = "es"
+    elif in_lang == "Bengali":
+        input_language = "bn"
+    elif in_lang == "Coreano":
+        input_language = "ko"
+    elif in_lang == "Mandarín":
+        input_language = "zh-cn"
+    elif in_lang == "Japonés":
+        input_language = "ja"
+    
+    out_lang = st.selectbox(
+        "Selecciona el lenguaje de salida",
+        ("Inglés", "Español", "Bengali", "Coreano", "Mandarín", "Japonés"),
+    )
+    if out_lang == "Inglés":
+        output_language = "en"
+    elif out_lang == "Español":
+        output_language = "es"
+    elif out_lang == "Bengali":
+        output_language = "bn"
+    elif out_lang == "Coreano":
+        output_language = "ko"
+    elif out_lang == "Mandarín":
+        output_language = "zh-cn"
+    elif out_lang == "Japonés":
+        output_language = "ja"
+    
+    english_accent = st.selectbox(
+        "Selecciona el acento",
+        (
+            "Defecto",
+            "Español",
+            "Reino Unido",
+            "Estados Unidos",
+            "Canada",
+            "Australia",
+            "Irlanda",
+            "Sudáfrica",
+        ),
+    )
+    
+    if english_accent == "Defecto":
+        tld = "com"
+    elif english_accent == "Español":
+        tld = "com.mx"
+    
+    elif english_accent == "Reino Unido":
+        tld = "co.uk"
+    elif english_accent == "Estados Unidos":
+        tld = "com"
+    elif english_accent == "Canada":
+        tld = "ca"
+    elif english_accent == "Australia":
+        tld = "com.au"
+    elif english_accent == "Irlanda":
+        tld = "ie"
+    elif english_accent == "Sudáfrica":
+        tld = "co.za"
+    
+    
+    def text_to_speech(input_language, output_language, text, tld):
+        translation = translator.translate(text, src=input_language, dest=output_language)
+        trans_text = translation.text
+        tts = gTTS(trans_text, lang=output_language, tld=tld, slow=False)
+        try:
+            my_file_name = text[0:20]
+        except:
+            my_file_name = "audio"
+        tts.save(f"temp/{my_file_name}.mp3")
+        return my_file_name, trans_text
+    
+    
+    display_output_text = st.checkbox("Mostrar el texto")
+    
+    if st.button("convertir"):
+        result, output_text = text_to_speech(input_language, output_language, text, tld)
+        audio_file = open(f"temp/{result}.mp3", "rb")
+        audio_bytes = audio_file.read()
+        st.markdown(f"## Tú audio:")
+        st.audio(audio_bytes, format="audio/mp3", start_time=0)
+    
+        if display_output_text:
+            st.markdown(f"## Texto de salida:")
+            st.write(f" {output_text}")
+    
+    
+    def remove_files(n):
+        mp3_files = glob.glob("temp/*mp3")
+        if len(mp3_files) != 0:
+            now = time.time()
+            n_days = n * 86400
+            for f in mp3_files:
+                if os.stat(f).st_mtime < now - n_days:
+                    os.remove(f)
+                    print("Deleted ", f)
 
-# ------------------ FUNCIONES ------------------
+    remove_files(7)
 
-def crear_poema(texto_base):
-    """Genera un poema simple basado en el texto de entrada."""
-    lineas = [
-        f"Entre las sombras del código, {texto_base.lower()},",
-        f"un susurro viaja entre líneas de luz,",
-        f"la máquina escucha, siente, traduce,",
-        f"y convierte tu voz en un sueño azul.",
-        f"Tu frase cruza fronteras del alma,",
-        f"se vuelve eco en la red estelar,",
-        f"donde los bytes respiran calma,",
-        f"y las palabras aprenden a amar.",
-    ]
-    random.shuffle(lineas)
-    return "\n".join(lineas)
-
-def text_to_speech(text):
-    """Convierte texto a audio con gTTS"""
-    tts = gTTS(text, lang="es", tld="com", slow=False)
-    os.makedirs("temp", exist_ok=True)
-    path = "temp/poema.mp3"
-    tts.save(path)
-    return path
-
-def remove_old_files():
-    for f in glob.glob("temp/*.mp3"):
-        if os.stat(f).st_mtime < time.time() - 86400:
-            os.remove(f)
-
-remove_old_files()
-
-# ------------------ GENERACIÓN POÉTICA ------------------
-if st.button("💫 Generar poema"):
-    if text:
-        poema = crear_poema(text)
-        st.markdown("<div class='poem-box'>" + poema.replace("\n", "<br>") + "</div>", unsafe_allow_html=True)
-        st.audio(text_to_speech(poema), format="audio/mp3")
-    else:
-        st.warning("Por favor, habla algo antes de generar el poema.")
-
-# ------------------ MODO EXTRA: TRADUCCIÓN ------------------
-st.markdown("---")
-st.subheader("🌐 Traducir el poema (opcional)")
-
-idioma_destino = st.selectbox("Selecciona el idioma de destino", ["Inglés", "Francés", "Japonés", "Coreano"])
-mapa_idiomas = {"Inglés": "en", "Francés": "fr", "Japonés": "ja", "Coreano": "ko"}
-
-if st.button("🌍 Traducir poema"):
-    if text:
-        poema = crear_poema(text)
-        traduccion = translator.translate(poema, dest=mapa_idiomas[idioma_destino]).text
-        st.markdown(f"#### ✨ Poema en {idioma_destino}:")
-        st.markdown(f"<div class='poem-box'>{traduccion}</div>", unsafe_allow_html=True)
-    else:
-        st.warning("Primero genera o graba tu poema.")
-
-# ------------------ FOOTER ------------------
-st.markdown("""
----
-<div style='text-align:center; color:#777; font-size:0.9rem'>
-Hecho con 💙 por un algoritmo que sueña en binario.<br>
-<em>“Donde la voz humana se transforma en poesía digital.”</em>
-</div>
-""", unsafe_allow_html=True)
+    
